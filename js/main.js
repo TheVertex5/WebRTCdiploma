@@ -7,6 +7,7 @@ var isfilled = false;
 var localStream;
 var pc;
 var remoteStream;
+var remoteID;
 var turnReady;
 
 var pcConfig = {
@@ -25,14 +26,38 @@ var sdpConstraints = {
 
 var room = 'foo';
 // Could prompt for room name:
-// room = prompt('Enter room name:');
+room = prompt('Enter room name:');
+
 
 var socket = io.connect();
 
-if (room !== '') {
-  socket.emit('create or join', room);
-  console.log('Attempted to create or  join room', room);
-}
+
+console.log('start get media');
+navigator.mediaDevices.getUserMedia({
+  audio: true,
+  video: true
+})
+.then(gotStream)
+.catch(function(e) {
+  alert('getUserMedia() error: ' + e.name);
+});
+console.log('end get media');
+
+(async() => {
+  console.log("waiting for variable");
+  while(typeof localStream === 'undefined') // define the condition as you like
+      await new Promise(resolve => setTimeout(resolve, 1000));
+  if (room !== '') {
+    var uName = prompt('Enter username:')
+    document.getElementById('headerText').innerText = 'Client '+uName+' of room '+room;
+    document.getElementById('localVideoLabel').innerHTML = uName;
+    document.getElementById('localVideoLabel').classList.remove('invisible');
+    socket.emit('join', room, uName);
+    console.log('Attempted to create or  join room', room);
+  };
+})();
+
+
 
 socket.on('created', function(room) {
   console.log('Created room ' + room);
@@ -65,21 +90,24 @@ socket.on('ready', function () {
 ////////////////////////////////////////////////
 
 function sendMessage(message) {
-  console.log('Client sending message: ', message, room);
-  socket.emit('message', message, room, 'client');
+  console.log('Client sending message: ', message, room, socket.id);
+  socket.emit('message', message, room, socket.id);
 }
 
 // This client receives a message
-socket.on('message', function(message, room, role) {
-  console.log('Client received message:', message, '\nin ', room, ' by ', role);
+socket.on('message', function(message, room, id) {
+  console.log('Client received message:', message, '\nin ', room, ' by ', id);
   if (message === 'got user media') {
+    console.log('got user media message');
     maybeStart();
   } else if (message.type === 'offer') {
-    if (!isInitiator && !isStarted) {
+    if (!isStarted) {
+      console.log('isnt started and offer');
       maybeStart();
+      pc.setRemoteDescription(new RTCSessionDescription(message));
+      doAnswer();
     }
-    pc.setRemoteDescription(new RTCSessionDescription(message));
-    doAnswer();
+    
   } else if (message.type === 'answer' && isStarted) {
     pc.setRemoteDescription(new RTCSessionDescription(message));
   } else if (message.type === 'candidate' && isStarted) {
@@ -87,7 +115,12 @@ socket.on('message', function(message, room, role) {
       sdpMLineIndex: message.label,
       candidate: message.candidate
     });
-    pc.addIceCandidate(candidate);
+    if (remoteID === undefined || id == remoteID) {
+      pc.addIceCandidate(candidate);
+    }
+    if (message.candidate == '' && remoteID === undefined) {
+      remoteID = id;
+    }
   } else if (message === 'bye' && isStarted) {
     handleRemoteHangup();
   }
@@ -98,17 +131,14 @@ socket.on('message', function(message, room, role) {
 var localVideo = document.querySelector('#localVideo');
 var remoteVideo = document.querySelector('#remoteVideo');
 
-navigator.mediaDevices.getUserMedia({
-  audio: false,
-  video: true
-})
-.then(gotStream)
-.catch(function(e) {
-  alert('getUserMedia() error: ' + e.name);
-});
+
 
 function gotStream(stream) {
   console.log('Adding local stream.');
+  if (stream === undefined) {
+    console.log('stream is undefined');
+    return;
+  }
   localStream = stream;
   localVideo.srcObject = stream;
   sendMessage('got user media');
@@ -136,16 +166,16 @@ function maybeStart() {
     createPeerConnection();
     pc.addStream(localStream);
     isStarted = true;
-    console.log('isInitiator', isInitiator);
-    if (isInitiator) {
-      doCall();
-    }
   }
+  
 }
 
-window.onbeforeunload = function() {
+/*window.onbeforeunload = function() {
   sendMessage('bye');
-};
+};*/
+window.addEventListener('beforeunload', function(){
+  sendMessage('bye');
+});
 
 /////////////////////////////////////////////////////////
 
