@@ -25,6 +25,7 @@ var sdpConstraints = {
 /////////////////////////////////////////////
 
 var room = 'foo';
+var uName = 'unown';
 // Could prompt for room name:
 room = prompt('Enter room name:');
 
@@ -48,7 +49,7 @@ console.log('end get media');
   while(typeof localStream === 'undefined') // define the condition as you like
       await new Promise(resolve => setTimeout(resolve, 1000));
   if (room !== '') {
-    var uName = prompt('Enter username:')
+    uName = prompt('Enter username:')
     document.getElementById('headerText').innerText = 'Client '+uName+' of room '+room;
     document.getElementById('localVideoLabel').innerHTML = uName;
     document.getElementById('localVideoLabel').classList.remove('invisible');
@@ -90,8 +91,8 @@ socket.on('ready', function () {
 ////////////////////////////////////////////////
 
 function sendMessage(message) {
-  console.log('Client sending message: ', message, room, socket.id);
-  socket.emit('message', message, room, socket.id);
+  console.log('Client sending message: ', message, room, socket.id, uName);
+  socket.emit('message', message, room, socket.id, uName);
 }
 
 // This client receives a message
@@ -123,6 +124,21 @@ socket.on('message', function(message, room, id) {
     }
   } else if (message === 'bye' && isStarted) {
     handleRemoteHangup();
+  }
+});
+
+socket.on('chat', function(message, room, id, uName) {
+  // display message
+  console.log('Client got chat message from '+uName+': ', message, room);
+  document.getElementById('chatBox').innerHTML += '<b style="color:blue;">'+uName+': </b>'+message+'<br>';
+});
+
+socket.on('status', function(message, room, id, uName) {
+  console.log('recived status: '+message);
+  if (message == 'mute') {
+    remoteStream.getAudioTracks()[0].enabled = false;
+  } else if (message == 'unMute') {
+    remoteStream.getAudioTracks()[0].enabled = true;
   }
 });
 
@@ -290,4 +306,17 @@ function stop() {
   isStarted = false;
   pc.close();
   pc = null;
+}
+
+function sendChatMsg() {
+  var ta = document.getElementById('chatMsg');
+  var chatMsgVal = ta.value;
+  ta.value = '';
+  console.log('chat', chatMsgVal, room, socket.id);
+  document.getElementById('chatBox').innerHTML += '<b style="color:green;">'+uName+': </b>'+chatMsgVal+'<br>';
+  socket.emit('chat', chatMsgVal, room, socket.id, uName);
+}
+
+function sendStatus(message) {
+  socket.emit('status', message, room, socket.id, uName);
 }
