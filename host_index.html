@@ -23,16 +23,22 @@
   <h1 id="headerText">Host</h1>
 
   <div class="container-fluid row" id="videos">
+
     <div class="col">
       <video class="row" id="localVideo" autoplay muted playsinline></video>
       <div class="row" id="hostButtons">
         <button type="button" class="col-2 btn btn-success fa-solid fa-microphone" id="muteAll" onclick="muteAllToggle();"></button>
-        <button type="button" class="col-2 btn btn-success fa-solid fa-microphone disabled" id="muteFocused"></button>
+        <button type="button" class="col-2 btn btn-secondary fa-solid fa-microphone disabled" id="muteFocused" onclick="muteFocusedToggle();"></button>
       </div>
       <div class="row" id="buttons">
         <button class="btn btn-outline-dark disabled" id="btnUnFocus" onclick="unFocusStream();">Unfocus</button>
       </div>
+      <div class="row" id="status">
+        <button type="button" id="cheatedBtn" class="btn btn-outline-dark col-2 fa-solid fa-person-circle-exclamation disabled" data-bs-toggle="button" onclick="setStatusData(this.id)"></button>
+        <button type="button" id="showIDBtn" class="btn btn-outline-success col-2 fa-solid fa-id-card disabled" data-bs-toggle="button" onclick="setStatusData(this.id)"></button>
+      </div>
     </div>
+
     <div class="col" id="remoteVideos">
       <div class="row">
         <div id="divVideo0" class="col-4 my-1">
@@ -88,6 +94,15 @@
         <div id="divVideo11" class="col-4 my-1">
           <video id="remoteVideo11" autoplay playsinline onclick="focusStream(this.id);" style="width: 100%;"></video>
           <span id="videoLabel11" class="badge bg-info invisible"></span>
+        </div>
+      </div>
+      <div class="row border rounded border-dark" id="chatroom">
+        <div class="row overflow-auto d-block" id="chatBox" style="height: 100px;">
+
+        </div>
+        <div class="input-group">
+          <textarea class="form-control" id="chatMsg" style="resize: none;" placeholder="Message" aria-label="Message" aria-describedby="sendChat"></textarea>
+          <button class="btn btn-outline-secondary" type="button" id="sendChat" onclick="sendChatMsg();">Send</button>
         </div>
       </div>
     </div>
