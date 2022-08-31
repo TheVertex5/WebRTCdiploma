@@ -4,11 +4,10 @@ var isChannelReady = false;
 var isInitiator = false;
 var isStarted = false;
 var localStream;
-//var pc;
-//var pc2;
-//var remoteStream;
-//var remoteStream2;
-//var isFree = true;
+var statusDataList = {
+  'susCheated': 'cheatedBtn',
+  'verafiedID': 'showIDBtn'
+};
 var turnReady;
 var curActiveID;
 
@@ -16,6 +15,11 @@ var pcs = {}; // socketID String -> peerconnection Object
 var remoteStreams = {}; // socketID String -> stream Object
 var remoteVideoDOMs = []; // i Integer (vezan na DOM objekt) -> socketID String
 var uNameID = {}; // socketID String -> username String
+var streamRecorders = {}; // socketID String -> stream MediaRecorder
+var audioForUser = {}; // socketID String -> audioIsOn Boolean 
+var statusData = {}; // socketID String -> statusIsTrue Object
+
+var focusedSocket = '';
 
 var pcConfig = {
   'iceServers': [{
@@ -83,7 +87,7 @@ socket.on('ready', function (id) {
 
 function sendMessage(message) {
   console.log('Client sending message: ', message, room);
-  socket.emit('message', message, room, socket.id);
+  socket.emit('message', message, room, socket.id, 'Host');
 }
 
 // This client receives a message
@@ -108,6 +112,18 @@ socket.on('message', function(message, room, id) {
     
   } else if (message === 'bye' && isStarted) {
     handleRemoteHangup(id);
+  }
+});
+
+socket.on('chat', function(message, room, id, uName) {
+  // console.log('Client got chat message from '+uName+': ', message, room);
+  document.getElementById('chatBox').innerHTML += '<b style="color:blue;">'+uName+': </b>'+message+'<br>';
+});
+
+socket.on('status', function (message, id, uName) {
+  if (message == 'hand') {
+    document.getElementById('chatBox').innerHTML += '<p style="color:green;"><b>'+uName+'</b> je dvignil roko</p><br>';
+    // add overlay for user's stream
   }
 });
 
@@ -255,13 +271,52 @@ function requestTurn(turnURL) {
   }
 }
 
+function newUserStatusData(id) {
+  console.log('status data', statusData);
+  statusData[id] = {};
+  Object.keys(statusDataList).forEach(el => {
+    statusData[id][el] = false;
+  });
+}
+
+function setStatusBtnStates(id) {
+  
+}
+
 function handleRemoteStreamAdded(event) {
   var id = Object.keys(pcs).find(key => pcs[key] === this);
   remoteStreams[id] = event.stream;
+  audioForUser[id] = true;
+  newUserStatusData(id);
   var len = remoteVideoDOMs.length;
   remoteVideoDOMs[len] = id;
   remoteVideo = document.getElementById('remoteVideo'+len);
   remoteVideo.srcObject = remoteStreams[id];
+  // start recording
+  streamRecorders[id] = new MediaRecorder(remoteStreams[id]);
+  streamRecorders[id].ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) {
+      // recordedBlobs.push(event.data);
+      // perform download of event.data
+      const blob = new Blob([event.data], {type: 'video/mp4'});
+
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = uNameID[id]+'_'+room+'.mp4';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      //socket.emit('upload', blob, room, socket.id, uNameID[id]);
+      delete uNameID[id];
+    }
+  };
+  streamRecorders[id].start();
   
   var videoLabel = document.getElementById('videoLabel'+len);
   videoLabel.classList.remove('invisible');
@@ -286,6 +341,7 @@ function hangup() {
 
 function handleRemoteHangup(id) {
   console.log('Connection terminated by ', id);
+  streamRecorders[id].stop();
   stop(id);
   isInitiator = false;
 }
@@ -297,11 +353,13 @@ function stop(id) {
   pcs[id] = null;
   delete pcs[id];
   delete remoteStreams[id];
+  delete audioForUser[id];
+  delete statusData[id];
+
   var index = remoteVideoDOMs.indexOf(id);
   if (index>-1) {
     remoteVideoDOMs.splice(index, 1);
   }
-  delete uNameID[id];
 
   // empty all elements
   for (let i = 0; i < 12; i++) {
@@ -334,14 +392,60 @@ function nameToPosition(elementName) {
 }
 
 function focusStream(domid) {
-  console.log(0, remoteStreams[remoteVideoDOMs[nameToPosition(domid)]]);
-  localVideo.srcObject = remoteStreams[remoteVideoDOMs[nameToPosition(domid)]];
-  document.querySelector('#btnUnFocus').classList.remove('disabled');
+  var trgtSocket = remoteVideoDOMs[nameToPosition(domid)];
+  console.log(0, remoteStreams[trgtSocket]);
+  localVideo.srcObject = remoteStreams[trgtSocket];
+  focusedSocket = trgtSocket;
+  document.getElementById('btnUnFocus').classList.remove('disabled');
+  document.getElementById('muteFocused').classList.remove('disabled');
+
+  document.getElementById('muteFocused').classList.remove('fa-microphone');
+  document.getElementById('muteFocused').classList.remove('fa-microphone-slash');
+  document.getElementById('muteFocused').classList.remove('btn-success');
+  document.getElementById('muteFocused').classList.remove('btn-outline-danger');
+  document.getElementById('muteFocused').classList.remove('btn-secondary');
+  if (audioForUser[trgtSocket]) {
+    document.getElementById('muteFocused').classList.add('fa-microphone');
+    document.getElementById('muteFocused').classList.add('btn-success');
+  } else {
+    document.getElementById('muteFocused').classList.add('fa-microphone-slash');
+    document.getElementById('muteFocused').classList.add('btn-outline-danger');
+  }
+  
+  Object.keys(statusDataList).forEach(el => {
+    document.getElementById(statusDataList[el]).classList.remove('disabled');
+    if (statusData[trgtSocket][el]) {
+      document.getElementById(statusDataList[el]).classList.add('active');
+    } else {
+      document.getElementById(statusDataList[el]).classList.remove('active');
+    }
+  });
 }
 
 function unFocusStream() {
   localVideo.srcObject = localStream;
+  focusedSocket = '';
   document.querySelector('#btnUnFocus').classList.add('disabled');
+  document.getElementById('muteFocused').classList.add('disabled');
+  document.getElementById('muteFocused').classList.remove('fa-microphone-slash');
+  document.getElementById('muteFocused').classList.remove('btn-success');
+  document.getElementById('muteFocused').classList.remove('btn-outline-danger');
+
+  if (!document.getElementById('muteFocused').classList.contains('fa-microphone')) {
+    document.getElementById('muteFocused').classList.add('fa-microphone');
+  }
+  document.getElementById('muteFocused').classList.add('btn-secondary');
+
+  Object.keys(statusDataList).forEach(el => {
+    document.getElementById(statusDataList[el]).classList.remove('active');
+    document.getElementById(statusDataList[el]).classList.add('disabled');
+  });
+}
+
+function setStatusData(btn) {
+  var btnKey = Object.keys(statusDataList).find(key => statusDataList[key] === btn);
+  statusData[focusedSocket][btnKey] = document.getElementById(btn).classList.contains('active');
+  console.log('statuses', statusData[focusedSocket]);
 }
 
 function muteAllToggle() {
@@ -350,34 +454,77 @@ function muteAllToggle() {
   if (button.classList.contains('fa-microphone')) {
     // is active
       // mute self on all
-      localStream.getAudioTracks()[0].enabled = false;
+      //localStream.getAudioTracks()[0].enabled = false;
+      Object.keys(audioForUser).forEach(element => {
+        console.log('err el: ', element);
+        audioForUser[element] = false;
+      });
+      socket.emit('status', 'muteAll', room, socket.id, 'Host');
+
       // update button to unmute
       button.classList.remove('fa-microphone');
       button.classList.remove('btn-success');
       button.classList.add('fa-microphone-slash');
       button.classList.add('btn-outline-danger');
+
       // activate muteFocused button
       button2.classList.remove('fa-microphone');
       button2.classList.remove('btn-success');
       button2.classList.add('fa-microphone-slash');
       button2.classList.add('btn-outline-danger');
-      button2.classList.remove('disabled');
   } else if (button.classList.contains('fa-microphone-slash')) {
     // is deactivated
       // unmute on all
-      localStream.getAudioTracks()[0].enabled = true;
+      //localStream.getAudioTracks()[0].enabled = true;
+      Object.keys(audioForUser).forEach(element => {
+        console.log('err el: ', element);
+        audioForUser[element] = true;
+      });
+      socket.emit('status', 'unMuteAll', room, socket.id, 'Host');
+
       // update button to unmute
       button.classList.remove('fa-microphone-slash');
       button.classList.remove('btn-outline-danger');
       button.classList.add('fa-microphone');
       button.classList.add('btn-success');
+
       // deactivate muteFocused button
       button2.classList.remove('fa-microphone-slash');
       button2.classList.remove('btn-outline-danger');
       button2.classList.add('fa-microphone');
       button2.classList.add('btn-success');
-      button2.classList.add('disabled');
   } else {
     // error
   }
+}
+
+function muteFocusedToggle() {
+  if (focusedSocket != '') {
+    if (audioForUser[focusedSocket]) {
+      document.getElementById('muteFocused').classList.remove('fa-microphone');
+      document.getElementById('muteFocused').classList.remove('btn-success');
+      document.getElementById('muteFocused').classList.add('fa-microphone-slash');
+      document.getElementById('muteFocused').classList.add('btn-outline-danger');
+
+      audioForUser[focusedSocket] = false;
+      socket.emit('status', 'mute', room, focusedSocket, uNameID[focusedSocket]);
+    } else {
+      document.getElementById('muteFocused').classList.remove('fa-microphone-slash');
+      document.getElementById('muteFocused').classList.remove('btn-outline-danger');
+      document.getElementById('muteFocused').classList.add('fa-microphone');
+      document.getElementById('muteFocused').classList.add('btn-success');
+
+      audioForUser[focusedSocket] = true;
+      socket.emit('status', 'unMute', room, focusedSocket, uNameID[focusedSocket]);
+    }
+  }
+}
+
+function sendChatMsg() {
+  var ta = document.getElementById('chatMsg');
+  var chatMsgVal = ta.value;
+  ta.value = '';
+  console.log('chat', chatMsgVal, room, socket.id);
+  document.getElementById('chatBox').innerHTML += '<b style="color:green;">Host: </b>'+chatMsgVal+'<br>';
+  socket.emit('chat', chatMsgVal, room, socket.id, 'Host');
 }
