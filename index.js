@@ -5,6 +5,8 @@ var http = require('http');
 var os = require('os');
 var socketIO = require('socket.io');
 //var nodeStatic = require('node-static');
+var versionStr = process.version.substring(1);
+var version = parseInt(versionStr.split('.')[0]);
 
 var https = require('https');
 var path = require('path');
@@ -40,7 +42,12 @@ httpsServer.listen(443);
 
 var rooms = {};
 var roomsToFile = {};
-var io = socketIO.listen(httpsServer);
+if (version<10) {
+  var io = socketIO(httpsServer, {}); 
+  io.listen(httpsServer); 
+} else {
+  var io = socketIO.listen(httpsServer);
+}
 io.sockets.on('connection', function(socket) {
 
   // convenience function to log server messages on the client
