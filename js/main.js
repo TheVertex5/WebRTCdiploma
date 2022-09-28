@@ -24,16 +24,10 @@ var sdpConstraints = {
 
 /////////////////////////////////////////////
 
-var room = 'foo';
-var uName = 'unown';
-// Could prompt for room name:
-room = prompt('Enter room name:');
-
 
 var socket = io.connect();
 
 
-console.log('start get media');
 navigator.mediaDevices.getUserMedia({
   audio: true,
   video: true
@@ -42,22 +36,15 @@ navigator.mediaDevices.getUserMedia({
 .catch(function(e) {
   alert('getUserMedia() error: ' + e.name);
 });
-console.log('end get media');
 
-(async() => {
-  console.log("waiting for variable");
-  while(typeof localStream === 'undefined') // define the condition as you like
-      await new Promise(resolve => setTimeout(resolve, 1000));
-  if (room !== '') {
-    uName = prompt('Enter username:')
-    document.getElementById('headerText').innerText = 'Client '+uName+' of room '+room;
-    document.getElementById('localVideoLabel').innerHTML = uName;
-    document.getElementById('localVideoLabel').classList.remove('invisible');
-    socket.emit('join', room, uName);
-    console.log('Attempted to create or  join room', room);
-  };
-})();
-
+var room = '';
+var uName = '';
+while (room=='' || room==null) {
+  room = prompt('Enter room name:');
+}
+while (uName=='' || uName==null) {
+  uName = prompt('Enter username name:');
+}
 
 
 socket.on('created', function(room) {
