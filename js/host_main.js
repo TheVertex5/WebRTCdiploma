@@ -39,11 +39,12 @@ addEventListener('beforeunload', event => {
 
 /////////////////////////////////////////////
 
-var room = 'foo';
-// Could prompt for room name:
-room = prompt('Enter room name:'); 
-
 var socket = io.connect();
+
+var room = '';
+while (room=='' || room==null) {
+  room = prompt('Enter room name:');
+}
 
 if (room !== '') {
   document.getElementById('headerText').innerText = 'Host of room '+room;
